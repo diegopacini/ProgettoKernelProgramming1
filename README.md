@@ -17,4 +17,4 @@ Per elencare i moduli caricati:
 sudo /sbin/lsmod
 
 Rimuovere il modulo:
-sudo /sbin/insmod modulo
+sudo /sbin/rmmod modulo
