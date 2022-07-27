@@ -137,7 +137,6 @@ static struct miscdevice test_device = {
 static int testmodule_init(void)
 {
   int res;
-  saved_struct = NULL;
 
   res = misc_register(&test_device);
 
