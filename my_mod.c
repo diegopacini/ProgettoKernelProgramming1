@@ -14,6 +14,7 @@ MODULE_LICENSE("GPL");
 
 static char *my_pointer;
 static int my_len;
+static int count_waiting_receivers;
 static struct mutex my_mutex;
 static wait_queue_head_t my_waitqueue_read;
 static wait_queue_head_t my_waitqueue_write;
@@ -29,6 +30,8 @@ static int my_open(struct inode *inode, struct file *file)
 
   *count = 0;
   file->private_data = count;
+
+  count_waiting_receivers = 0;
   
   return 0;
 }
@@ -52,14 +55,19 @@ ssize_t my_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
 
     return 0;
   }
-  /* chi scrive resta bloccato finché qualcuno non ha scritto */
+  /* chi legge sblocca eventuali scrittori in coda e attende che questi scrivano */
   while (my_pointer == NULL) {
+    count_waiting_receivers++;
+    wake_up_interruptible(&my_waitqueue_write);
     mutex_unlock(&my_mutex);
     wait_event_interruptible(my_waitqueue_read, (my_pointer != NULL));
+    /* se adesso arriva un altro R, lui salta lo while (perché qualcuno ha scritto e quindi my_pointer != NULL) e al termine della read pone my_pointer = NULL. Questo R completa il ciclo e trova my_pointer == NULL, quindi si rimette in attesa */
+    /* se adesso arriva uno W, lui trova my_pointer != NULL perché qualcuno ha scritto e si mette in attesa nella sua coda */
     if(signal_pending(current)){
       return -ERESTARTSYS;
     }
     mutex_lock(&my_mutex);
+    count_waiting_receivers--;
   }
   if (len > my_len) {
     res = my_len;
@@ -76,8 +84,7 @@ ssize_t my_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
   kfree(my_pointer);
   my_pointer = NULL;
   *count = 1;
-  /* avvenuta la lettura, vengono svegliati eventuali processi scrittori in coda */
-  wake_up_interruptible(&my_waitqueue_write);
+  //wake_up_interruptible(&my_waitqueue_write);
   mutex_unlock(&my_mutex);
 
   return res;
@@ -88,10 +95,12 @@ static ssize_t my_write(struct file *file, const char __user * buf, size_t count
   int err;
   
   mutex_lock(&my_mutex);
-  /* chi scrive resta bloccato finché qualcuno non ha letto */
-  while (my_pointer != NULL) {
+  /* se nessuno deve leggere, il processo scrittore si blocca */
+  while (count_waiting_receivers == 0 || my_pointer != NULL) {
     mutex_unlock(&my_mutex);
-    wait_event_interruptible(my_waitqueue_write, (my_pointer == NULL));
+    wait_event_interruptible(my_waitqueue_write, (count_waiting_receivers != 0));
+    /* se adesso arriva un altro W, lui salta lo while e mette mypointer != NULL. Questo W finisce il ciclo e trova my_pointer != NULL, quindi si rimette in attesa */
+    /* se adesso arriva un R, lui trova mypointer != NULL perché nessuno ha ancora scritto e si mette in attesa nella sua coda */
     if(signal_pending(current)){
       return -ERESTARTSYS;
     }
