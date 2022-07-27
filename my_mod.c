@@ -9,7 +9,7 @@
 
 
 MODULE_AUTHOR("Diego Pacini");
-MODULE_DESCRIPTION("Comunicazione sincrona");
+MODULE_DESCRIPTION("Comunicazione sincrona"); /* chi scrive resta bloccato, finché qualcuno non ha letto */
 MODULE_LICENSE("GPL");
 
 static char *my_pointer;
