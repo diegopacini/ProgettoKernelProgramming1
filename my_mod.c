@@ -30,8 +30,6 @@ static int my_open(struct inode *inode, struct file *file)
 
   *count = 0;
   file->private_data = count;
-
-  count_waiting_receivers = 0;
   
   return 0;
 }
@@ -154,6 +152,8 @@ static int testmodule_init(void)
   mutex_init(&my_mutex);
   init_waitqueue_head(&my_waitqueue_read);
   init_waitqueue_head(&my_waitqueue_write);
+  
+  count_waiting_receivers = 0;
 
   return 0;
 }
